@@ -18,6 +18,18 @@ def escape_html(text):
     
     return text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
+def paper_id_without_dot(paper_id: str) -> str:
+    if "." in paper_id:
+        return paper_id.replace(".", "")
+    else:
+        return paper_id
+
+def paper_id_with_dot(paper_id: str) -> str:
+    if "." in paper_id:
+        return paper_id
+    else:
+        return paper_id[: 4] + "." + paper_id[4 : ]
+
 def chunk_html_message(message, max_length=4000):
     """Split a long HTML message into chunks without breaking HTML tags.
     
@@ -290,7 +302,7 @@ async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             message += f"   Authors: {authors}\n"
             
             paper_id = paper['id'].split('/')[-1]  # Extract just the ID part
-            message += f"   Use /abstract{paper_id} to view details\n\n"
+            message += f"   Use /abstract{paper_id_without_dot(paper_id)} to view details\n\n"
         
         # Split message if it's too long
         if len(message) <= 4096:
@@ -315,7 +327,7 @@ async def authorize_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     
     # Check if this is the first user (initialization)
     if not config['authorized_users']:
-        config['authorized_users'].append(user_id)
+        config['authorized_users'].append(str(user_id))
         save_config(config)
         await update.message.reply_text(f'You are now authorized as the admin user.')
         return
@@ -334,7 +346,7 @@ async def authorize_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             await update.message.reply_text(f'User {new_user_id} is already authorized.')
             return
         
-        config['authorized_users'].append(new_user_id)
+        config['authorized_users'].append(str(new_user_id))
         save_config(config)
         await update.message.reply_text(f'User {new_user_id} has been authorized.')
     except ValueError:
@@ -351,11 +363,11 @@ async def paper_abstract(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.message.reply_text('Please provide an arXiv paper ID (e.g., /abstract 2101.12345)')
         return
     
-    paper_id = context.args[0]
+    paper_id = paper_id_with_dot(context.args[0])
     await update.message.reply_text(f'Searching for paper with ID: {paper_id}...')
     
     try:
-        from arxiv_api import fetch_arxiv_papers
+        from arxiv_api import fetch_paper_by_id
         paper = fetch_paper_by_id(paper_id)
         
         if not paper:
@@ -406,7 +418,7 @@ async def abstract_no_space(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     # Extract paper ID from the command text
     command_text = update.message.text
     # Skip '/abstract' part and get the remaining text as paper_id
-    paper_id = command_text[9:].strip()
+    paper_id = paper_id_with_dot(command_text[9:].strip())
     
     if not paper_id:
         await update.message.reply_text('Please provide an arXiv paper ID (e.g., /abstract 2101.12345)')
@@ -415,7 +427,7 @@ async def abstract_no_space(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     await update.message.reply_text(f'Searching for paper with ID: {paper_id}...')
     
     try:
-        from arxiv_api import fetch_arxiv_papers
+        from arxiv_api import fetch_paper_by_id
         paper = fetch_paper_by_id(paper_id)
         
         if not paper:
@@ -506,7 +518,7 @@ async def send_daily_papers(context: CallbackContext) -> None:
             message += f"   Authors: {authors}\n"
             
             paper_id = paper['id'].split('/')[-1]  # Extract just the ID part
-            message += f"   Use /abstract{paper_id} to view details\n\n"
+            message += f"   Use /abstract{paper_id_without_dot(paper_id)} to view details\n\n"
         
         # Send to all authorized users
         for user_id in config['authorized_users']:
