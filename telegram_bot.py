@@ -272,7 +272,7 @@ async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             message += f"   Authors: {authors}\n"
             
             paper_id = paper['id'].split('/')[-1]  # Extract just the ID part
-            message += f"   Use /abstract {paper_id} to view details\n\n"
+            message += f"   Use /abstract{paper_id} to view details\n\n"
         
         # Split message if it's too long
         if len(message) <= 4096:
@@ -463,7 +463,7 @@ async def send_daily_papers(context: CallbackContext) -> None:
                 message += f"   Authors: {authors}\n"
                 
                 paper_id = paper['id'].split('/')[-1]  # Extract just the ID part
-                message += f"   Use /abstract {paper_id} to view details\n\n"
+                message += f"   Use /abstract{paper_id} to view details\n\n"
             
             # Send to all authorized users
             for user_id in config['authorized_users']:
