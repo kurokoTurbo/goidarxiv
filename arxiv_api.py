@@ -52,4 +52,5 @@ def fetch_arxiv_papers(topics, start_date, end_date, max_results=100):
     return results
 
 
-fetch_arxiv_papers("cs.CV", '2025-01-01', '2025-01-31', max_results=5)
+if __name__ == "__main__":    
+    fetch_arxiv_papers("cs.CV", '2025-01-01', '2025-01-31', max_results=5)

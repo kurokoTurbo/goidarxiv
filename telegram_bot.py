@@ -175,13 +175,13 @@ async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     
     await update.message.reply_text('Searching for today\'s papers, please wait...')
     
-    today = datetime.now().strftime('%Y-%m-%d')
+    today = datetime.today().strftime('%Y-%m-%d')
     all_results = []
     
     # Fetch papers for each topic separately
     for topic in config['topics']:
         try:
-            results = fetch_arxiv_papers(topic, today, today, max_results=10)
+            results = fetch_arxiv_papers(topic, today, today)
             if results:
                 all_results.append((topic, results))
         except Exception as e:
