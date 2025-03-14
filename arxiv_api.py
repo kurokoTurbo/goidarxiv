@@ -1,5 +1,5 @@
 import arxiv
-from datetime import datetime, timedelta
+from datetime import datetime
 
 def fetch_arxiv_papers(topics, start_date, end_date, max_results=100):
     """
