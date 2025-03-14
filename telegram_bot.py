@@ -3,7 +3,7 @@ import os
 from datetime import datetime, time, timedelta
 import pytz
 from telegram import Update
-from telegram.ext import Application, CommandHandler, CallbackContext, ContextTypes
+from telegram.ext import Application, CommandHandler, CallbackContext, ContextTypes, MessageHandler, filters
 import json
 from arxiv_api import fetch_arxiv_papers
 
@@ -378,6 +378,66 @@ async def paper_abstract(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.message.reply_text(f"An error occurred while fetching the paper: {str(e)}")
 
 
+async def abstract_no_space(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /abstractXXXXX commands where the ID is attached to the command."""
+    user_id = update.effective_user.id
+    if user_id not in config['authorized_users']:
+        await update.message.reply_text('You are not authorized to use this bot.')
+        return
+    
+    # Extract paper ID from the command text
+    command_text = update.message.text
+    # Skip '/abstract' part and get the remaining text as paper_id
+    paper_id = command_text[9:].strip()
+    
+    if not paper_id:
+        await update.message.reply_text('Please provide an arXiv paper ID (e.g., /abstract 2101.12345)')
+        return
+    
+    await update.message.reply_text(f'Searching for paper with ID: {paper_id}...')
+    
+    try:
+        from arxiv_api import fetch_paper_by_id
+        paper = fetch_paper_by_id(paper_id)
+        
+        if not paper:
+            await update.message.reply_text(f'No paper found with ID: {paper_id}')
+            return
+        
+        # Format the paper details
+        title = escape_html(paper['title'])
+        authors = ', '.join([escape_html(author) for author in paper['authors']])
+        abstract = escape_html(paper['abstract'])
+        categories = ', '.join(paper['categories']) if 'categories' in paper else 'N/A'
+        published = paper['published']
+        link = paper['link']
+        
+        message = (
+            f"📄 <b>{title}</b>\n\n"
+            f"👥 <b>Authors:</b> {authors}\n\n"
+            f"📅 <b>Published:</b> {published}\n"
+            f"🏷️ <b>Categories:</b> {categories}\n"
+            f"🔗 <a href=\"{link}\">PDF Link</a>\n\n"
+            f"📝 <b>Abstract:</b>\n{abstract}"
+        )
+        
+        # Split message if it's too long
+        if len(message) <= 4096:
+            await update.message.reply_text(message, parse_mode='HTML')
+        else:
+            chunks = chunk_html_message(message)
+            for chunk in chunks:
+                try:
+                    await update.message.reply_text(chunk, parse_mode='HTML')
+                except Exception as e:
+                    logger.error(f"Error sending message chunk: {e}")
+                    await update.message.reply_text(f"Error formatting message. Here's the plain text portion:\n\n{chunk[:3000]}")
+    
+    except Exception as e:
+        logger.error(f"Error fetching paper with ID {paper_id}: {e}")
+        await update.message.reply_text(f"An error occurred while fetching the paper: {str(e)}")
+
+
 async def send_daily_papers(context: CallbackContext) -> None:
     """Send daily papers to all authorized users."""
     today = datetime.now().strftime('%Y-%m-%d')
@@ -461,6 +521,7 @@ def run_bot():
     application.add_handler(CommandHandler("today", today_command))
     application.add_handler(CommandHandler("abstract", paper_abstract))
     application.add_handler(CommandHandler("authorize", authorize_user))
+    application.add_handler(MessageHandler(filters.Regex(r'^/abstract[0-9v\.]+'), abstract_no_space))
     
     # Set up job queue for daily notifications
     job_queue = application.job_queue
