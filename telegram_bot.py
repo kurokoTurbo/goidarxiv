@@ -70,7 +70,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         '/remove_topic <topic> - Remove a topic\n'
         '/set_time HH:MM - Set notification time (24h format)\n'
         '/set_timezone <timezone> - Set timezone (e.g., UTC, US/Eastern)\n'
-        '/yesterday - Get yesterday\'s papers now\n'
+        '/today - Get today\'s papers now\n'
         '/authorize <user_id> - Authorize a new user (admin only)\n'
         '/help - Show this help message'
     )
@@ -167,21 +167,21 @@ async def set_timezone(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await update.message.reply_text(f'Unknown timezone: {timezone}. Please provide a valid timezone.')
 
 async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Get yesterday's papers."""
+    """Get today's papers."""
     user_id = update.effective_user.id
     if user_id not in config['authorized_users']:
         await update.message.reply_text('You are not authorized to use this bot.')
         return
     
-    await update.message.reply_text('Searching for yesterday\'s papers, please wait...')
+    await update.message.reply_text('Searching for today\'s papers, please wait...')
     
-    yesterday = (datetime.today() - timedelta(days=1)).strftime('%Y-%m-%d')
+    today = datetime.today().strftime('%Y-%m-%d')
     all_results = []
     
     # Fetch papers for each topic separately
     for topic in config['topics']:
         try:
-            results = fetch_arxiv_papers(topic, yesterday, yesterday)
+            results = fetch_arxiv_papers(topic, today, today)
             if results:
                 all_results.append((topic, results))
         except Exception as e:
@@ -193,7 +193,7 @@ async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     
     # Format and send results
     for topic, results in all_results:
-        message = f"📚 *{topic} Papers Yesterday* 📚\n\n"
+        message = f"📚 *{topic} Papers Today* 📚\n\n"
         
         for i, paper in enumerate(results, 1):
             title = paper['title'].replace('*', '\\*').replace('_', '\\_').replace('[', '\\[').replace(']', '\\]')
@@ -247,17 +247,17 @@ async def authorize_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
 async def send_daily_papers(context: CallbackContext) -> None:
     """Send daily papers to all authorized users."""
-    yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+    today = datetime.now().strftime('%Y-%m-%d')
     
     for topic in config['topics']:
         try:
-            results = fetch_arxiv_papers(topic, yesterday, yesterday, max_results=10)
+            results = fetch_arxiv_papers(topic, today, today, max_results=10)
             
             if not results:
-                logger.info(f"No papers found yesterday for topic {topic}")
+                logger.info(f"No papers found today for topic {topic}")
                 continue
             
-            message = f"📚 *{topic} Papers Yesterday* 📚\n\n"
+            message = f"📚 *{topic} Papers Today* 📚\n\n"
             
             for i, paper in enumerate(results, 1):
                 title = paper['title'].replace('*', '\\*').replace('_', '\\_').replace('[', '\\[').replace(']', '\\]')
@@ -310,7 +310,7 @@ def run_bot():
     application.add_handler(CommandHandler("remove_topic", remove_topic))
     application.add_handler(CommandHandler("set_time", set_time))
     application.add_handler(CommandHandler("set_timezone", set_timezone))
-    application.add_handler(CommandHandler("yesterday", today_command))
+    application.add_handler(CommandHandler("today", today_command))
     application.add_handler(CommandHandler("authorize", authorize_user))
     
     # Set up job queue for daily notifications
