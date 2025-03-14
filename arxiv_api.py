@@ -52,5 +52,47 @@ def fetch_arxiv_papers(topics, start_date, end_date, max_results=100):
     return results
 
 
+def fetch_paper_by_id(paper_id):
+    """
+    Fetch a single arXiv paper by its ID.
+    
+    Args:
+        paper_id (str): arXiv paper ID (e.g., '2101.12345')
+    
+    Returns:
+        dict: Paper details or None if not found
+    """
+    # Clean up the ID if it contains the full URL or arxiv prefix
+    if '/' in paper_id:
+        paper_id = paper_id.split('/')[-1]
+    if 'arxiv.org' in paper_id.lower():
+        paper_id = paper_id.split('arxiv.org/')[-1]
+    if 'abs' in paper_id:
+        paper_id = paper_id.split('abs/')[-1]
+    if '.pdf' in paper_id:
+        paper_id = paper_id.replace('.pdf', '')
+    
+    # Create search query for the specific paper
+    client = arxiv.Client()
+    search = arxiv.Search(id_list=[paper_id])
+    
+    # Get the paper
+    results = list(client.results(search))
+    
+    if not results:
+        return None
+    
+    paper = results[0]
+    return {
+        'title': paper.title,
+        'abstract': paper.summary,
+        'link': paper.pdf_url,
+        'published': paper.published.strftime('%Y-%m-%d'),
+        'authors': [author.name for author in paper.authors],
+        'id': paper.entry_id,
+        'categories': paper.categories
+    }
+
+
 if __name__ == "__main__":    
     fetch_arxiv_papers("cs.CV", '2025-01-01', '2025-01-31', max_results=5)
