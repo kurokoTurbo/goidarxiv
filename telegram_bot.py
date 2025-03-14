@@ -299,22 +299,9 @@ async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                     except Exception as inner_e:
                         logger.error(f"Failed to send even plain text message: {inner_e}")
 
+@authorized_only
 async def authorize_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Authorize a new user (admin only)."""
-    user_id = update.effective_user.id
-    
-    # Check if this is the first user (initialization)
-    if not config['authorized_users']:
-        config['authorized_users'].append(str(user_id))
-        save_config(config)
-        await update.message.reply_text(f'You are now authorized as the admin user.')
-        return
-    
-    # Use the standard authorization check after handling the initialization case
-    if user_id not in config['authorized_users']:
-        await update.message.reply_text('You are not authorized to use this bot.')
-        return
-    
     if not context.args or len(context.args) != 1:
         await update.message.reply_text('Please provide a user ID to authorize.')
         return
