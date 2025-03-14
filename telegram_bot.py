@@ -30,6 +30,17 @@ def paper_id_with_dot(paper_id: str) -> str:
     else:
         return paper_id[: 4] + "." + paper_id[4 : ]
 
+def authorized_only(func):
+    """Decorator to check if user is authorized to use the bot."""
+    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
+        user_id = update.effective_user.id
+        if user_id not in config['authorized_users']:
+            await update.message.reply_text('You are not authorized to use this bot.')
+            logger.warning(f"Unauthorized access attempt by user {user_id}")
+            return
+        return await func(update, context, *args, **kwargs)
+    return wrapper
+
 def chunk_html_message(message, max_length=4000):
     """Split a long HTML message into chunks without breaking HTML tags.
     
@@ -119,26 +130,17 @@ def save_config(config):
 config = load_config()
 
 # Command handlers
+@authorized_only
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send a message when the command /start is issued."""
-    user_id = update.effective_user.id
-    if user_id not in config['authorized_users']:
-        await update.message.reply_text('You are not authorized to use this bot.')
-        logger.warning(f"Unauthorized access attempt by user {user_id}")
-        return
-    
     await update.message.reply_text(
         'Hi! I am your ArXiv Paper Bot. I will send you daily updates of papers on your topics of interest.\n\n'
         'Use /help to see available commands.'
     )
 
+@authorized_only
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send a message when the command /help is issued."""
-    user_id = update.effective_user.id
-    if user_id not in config['authorized_users']:
-        await update.message.reply_text('You are not authorized to use this bot.')
-        return
-    
     await update.message.reply_text(
         'Available commands:\n\n'
         '/topics - Show current topics\n'
@@ -152,23 +154,15 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         '/help - Show this help message'
     )
 
+@authorized_only
 async def topics_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Show current topics."""
-    user_id = update.effective_user.id
-    if user_id not in config['authorized_users']:
-        await update.message.reply_text('You are not authorized to use this bot.')
-        return
-    
     topics_text = "Current topics:\n\n" + "\n".join([f"- {topic}" for topic in config['topics']])
     await update.message.reply_text(topics_text)
 
+@authorized_only
 async def add_topic(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Add a new topic."""
-    user_id = update.effective_user.id
-    if user_id not in config['authorized_users']:
-        await update.message.reply_text('You are not authorized to use this bot.')
-        return
-    
     if not context.args:
         await update.message.reply_text('Please provide a topic to add (e.g., cs.CV).')
         return
@@ -182,13 +176,9 @@ async def add_topic(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     save_config(config)
     await update.message.reply_text(f'Added topic: {topic}')
 
+@authorized_only
 async def remove_topic(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Remove a topic."""
-    user_id = update.effective_user.id
-    if user_id not in config['authorized_users']:
-        await update.message.reply_text('You are not authorized to use this bot.')
-        return
-    
     if not context.args:
         await update.message.reply_text('Please provide a topic to remove.')
         return
@@ -202,13 +192,9 @@ async def remove_topic(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     save_config(config)
     await update.message.reply_text(f'Removed topic: {topic}')
 
+@authorized_only
 async def set_time(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Set notification time."""
-    user_id = update.effective_user.id
-    if user_id not in config['authorized_users']:
-        await update.message.reply_text('You are not authorized to use this bot.')
-        return
-    
     if not context.args or len(context.args) != 1:
         await update.message.reply_text('Please provide time in HH:MM format.')
         return
@@ -223,13 +209,9 @@ async def set_time(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     except ValueError:
         await update.message.reply_text('Invalid time format. Please use HH:MM (24h format).')
 
+@authorized_only
 async def set_timezone(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Set timezone."""
-    user_id = update.effective_user.id
-    if user_id not in config['authorized_users']:
-        await update.message.reply_text('You are not authorized to use this bot.')
-        return
-    
     if not context.args:
         await update.message.reply_text('Please provide a timezone (e.g., UTC, US/Eastern).')
         return
@@ -243,13 +225,9 @@ async def set_timezone(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     except pytz.exceptions.UnknownTimeZoneError:
         await update.message.reply_text(f'Unknown timezone: {timezone}. Please provide a valid timezone.')
 
+@authorized_only
 async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Get today's papers."""
-    user_id = update.effective_user.id
-    if user_id not in config['authorized_users']:
-        await update.message.reply_text('You are not authorized to use this bot.')
-        return
-    
     await update.message.reply_text('Searching for today\'s papers, please wait...')
     
     now = datetime.now()
@@ -332,6 +310,7 @@ async def authorize_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.message.reply_text(f'You are now authorized as the admin user.')
         return
     
+    # Use the standard authorization check after handling the initialization case
     if user_id not in config['authorized_users']:
         await update.message.reply_text('You are not authorized to use this bot.')
         return
@@ -352,13 +331,9 @@ async def authorize_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     except ValueError:
         await update.message.reply_text('Invalid user ID. Please provide a numeric ID.')
 
+@authorized_only
 async def paper_abstract(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Get full abstract of a paper by its arXiv ID."""
-    user_id = update.effective_user.id
-    if user_id not in config['authorized_users']:
-        await update.message.reply_text('You are not authorized to use this bot.')
-        return
-    
     if not context.args or len(context.args) < 1:
         await update.message.reply_text('Please provide an arXiv paper ID (e.g., /abstract 2101.12345)')
         return
@@ -408,13 +383,9 @@ async def paper_abstract(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.message.reply_text(f"An error occurred while fetching the paper: {str(e)}")
 
 
+@authorized_only
 async def abstract_no_space(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /abstractXXXXX commands where the ID is attached to the command."""
-    user_id = update.effective_user.id
-    if user_id not in config['authorized_users']:
-        await update.message.reply_text('You are not authorized to use this bot.')
-        return
-    
     # Extract paper ID from the command text
     command_text = update.message.text
     # Skip '/abstract' part and get the remaining text as paper_id
