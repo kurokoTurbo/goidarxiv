@@ -227,8 +227,10 @@ async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             message += f"{i}\\. *{title}*\n"
             message += f"   Authors: {authors}\n"
             
-            # Handle link properly - escape brackets but not the URL itself
+            # Handle link properly for MarkdownV2 - all special characters need escaping
             link = paper['link']
+            for char in ['.', ')', '(', '-']:
+                link = link.replace(char, f"\\{char}")
             message += f"   \\[PDF\\]({link})\n\n"
         
         # Split message if it's too long
@@ -295,8 +297,10 @@ async def send_daily_papers(context: CallbackContext) -> None:
                 message += f"{i}\\. *{title}*\n"
                 message += f"   Authors: {authors}\n"
                 
-                # Handle link properly - escape brackets but not the URL itself
+                # Handle link properly for MarkdownV2 - all special characters need escaping
                 link = paper['link']
+                for char in ['.', ')', '(', '-']:
+                    link = link.replace(char, f"\\{char}")
                 message += f"   \\[PDF\\]({link})\n\n"
             
             # Send to all authorized users
