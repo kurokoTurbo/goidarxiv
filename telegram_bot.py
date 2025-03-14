@@ -7,26 +7,16 @@ from telegram.ext import Application, CommandHandler, CallbackContext, ContextTy
 import json
 from arxiv_api import fetch_arxiv_papers
 
-def escape_markdown(text, exclude_url=False):
-    """Escape Markdown special characters
+def escape_html(text):
+    """Escape HTML special characters
     
     Args:
         text: Text to escape
-        exclude_url: If True, don't escape characters that are common in URLs
     """
     if not text:
         return ""
     
-    # Characters that need to be escaped in Markdown v2
-    if exclude_url:
-        # Don't escape characters needed for URLs
-        escape_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
-    else:
-        escape_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
-    
-    for char in escape_chars:
-        text = text.replace(char, f"\\{char}")
-    return text
+    return text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
 # Enable logging
 logging.basicConfig(
@@ -215,30 +205,29 @@ async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     
     # Format and send results
     for topic, results in all_results:
-        message = f"📚 *{topic} Papers Today* 📚\n\n"
+        message = f"📚 <b>{topic} Papers Today</b> 📚\n\n"
         
         for i, paper in enumerate(results, 1):
-            title = escape_markdown(paper['title'])
+            title = escape_html(paper['title'])
             authors = ', '.join(paper['authors'][:3])
             if len(paper['authors']) > 3:
                 authors += ' et al.'
-            authors = escape_markdown(authors)
+            authors = escape_html(authors)
             
-            message += f"{i}\\. *{title}*\n"
+            message += f"{i}. <b>{title}</b>\n"
             message += f"   Authors: {authors}\n"
             
-            # Use the escape_markdown function for the link
-            link = escape_markdown(paper['link'], exclude_url=True)
-            message += f"   \\[PDF\\]({link})\n\n"
+            link = paper['link']
+            message += f"   <a href=\"{link}\">PDF</a>\n\n"
         
         # Split message if it's too long
         if len(message) <= 4096:
-            await update.message.reply_text(message, parse_mode='MarkdownV2')
+            await update.message.reply_text(message, parse_mode='HTML')
         else:
             # Simple split for long messages
             chunks = [message[i:i+4000] for i in range(0, len(message), 4000)]
             for chunk in chunks:
-                await update.message.reply_text(chunk, parse_mode='MarkdownV2')
+                await update.message.reply_text(chunk, parse_mode='HTML')
 
 async def authorize_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Authorize a new user (admin only)."""
@@ -283,21 +272,20 @@ async def send_daily_papers(context: CallbackContext) -> None:
                 logger.info(f"No papers found today for topic {topic}")
                 continue
             
-            message = f"📚 *{topic} Papers Today* 📚\n\n"
+            message = f"📚 <b>{topic} Papers Today</b> 📚\n\n"
             
             for i, paper in enumerate(results, 1):
-                title = escape_markdown(paper['title'])
+                title = escape_html(paper['title'])
                 authors = ', '.join(paper['authors'][:3])
                 if len(paper['authors']) > 3:
                     authors += ' et al.'
-                authors = escape_markdown(authors)
+                authors = escape_html(authors)
                 
-                message += f"{i}\\. *{title}*\n"
+                message += f"{i}. <b>{title}</b>\n"
                 message += f"   Authors: {authors}\n"
                 
-                # Use the escape_markdown function for the link
-                link = escape_markdown(paper['link'], exclude_url=True)
-                message += f"   \\[PDF\\]({link})\n\n"
+                link = paper['link']
+                message += f"   <a href=\"{link}\">PDF</a>\n\n"
             
             # Send to all authorized users
             for user_id in config['authorized_users']:
@@ -306,7 +294,7 @@ async def send_daily_papers(context: CallbackContext) -> None:
                         await context.bot.send_message(
                             chat_id=user_id,
                             text=message,
-                            parse_mode='MarkdownV2'
+                            parse_mode='HTML'
                         )
                     else:
                         # Simple split for long messages
@@ -315,7 +303,7 @@ async def send_daily_papers(context: CallbackContext) -> None:
                             await context.bot.send_message(
                                 chat_id=user_id,
                                 text=chunk,
-                                parse_mode='MarkdownV2'
+                                parse_mode='HTML'
                             )
                 except Exception as e:
                     logger.error(f"Error sending message to user {user_id}: {e}")
