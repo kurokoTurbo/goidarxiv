@@ -7,12 +7,23 @@ from telegram.ext import Application, CommandHandler, CallbackContext, ContextTy
 import json
 from arxiv_api import fetch_arxiv_papers
 
-def escape_markdown(text):
-    """Escape Markdown special characters"""
+def escape_markdown(text, exclude_url=False):
+    """Escape Markdown special characters
+    
+    Args:
+        text: Text to escape
+        exclude_url: If True, don't escape characters that are common in URLs
+    """
     if not text:
         return ""
+    
     # Characters that need to be escaped in Markdown v2
-    escape_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
+    if exclude_url:
+        # Don't escape characters needed for URLs
+        escape_chars = ['_', '*', '[', ']', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '!']
+    else:
+        escape_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
+    
     for char in escape_chars:
         text = text.replace(char, f"\\{char}")
     return text
@@ -213,9 +224,12 @@ async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                 authors += ' et al.'
             authors = escape_markdown(authors)
             
-            message += f"{i}. *{title}*\n"
+            message += f"{i}\\. *{title}*\n"
             message += f"   Authors: {authors}\n"
-            message += f"   [PDF]({paper['link']})\n\n"
+            
+            # Handle link properly - escape brackets but not the URL itself
+            link = paper['link']
+            message += f"   \\[PDF\\]({link})\n\n"
         
         # Split message if it's too long
         if len(message) <= 4096:
@@ -278,9 +292,12 @@ async def send_daily_papers(context: CallbackContext) -> None:
                     authors += ' et al.'
                 authors = escape_markdown(authors)
                 
-                message += f"{i}. *{title}*\n"
+                message += f"{i}\\. *{title}*\n"
                 message += f"   Authors: {authors}\n"
-                message += f"   [PDF]({paper['link']})\n\n"
+                
+                # Handle link properly - escape brackets but not the URL itself
+                link = paper['link']
+                message += f"   \\[PDF\\]({link})\n\n"
             
             # Send to all authorized users
             for user_id in config['authorized_users']:
