@@ -337,7 +337,6 @@ async def paper_abstract(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await update.message.reply_text(f'Searching for paper with ID: {paper_id}...')
     
     try:
-        from arxiv_api import fetch_paper_by_id
         paper = fetch_paper_by_id(paper_id)
         
         if not paper:
@@ -397,7 +396,6 @@ async def abstract_no_space(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     await update.message.reply_text(f'Searching for paper with ID: {paper_id}...')
     
     try:
-        from arxiv_api import fetch_paper_by_id
         paper = fetch_paper_by_id(paper_id)
         
         if not paper:
