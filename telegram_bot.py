@@ -7,6 +7,16 @@ from telegram.ext import Application, CommandHandler, CallbackContext, ContextTy
 import json
 from arxiv_api import fetch_arxiv_papers
 
+def escape_markdown(text):
+    """Escape Markdown special characters"""
+    if not text:
+        return ""
+    # Characters that need to be escaped in Markdown v2
+    escape_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
+    for char in escape_chars:
+        text = text.replace(char, f"\\{char}")
+    return text
+
 # Enable logging
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -197,10 +207,11 @@ async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         message = f"📚 *{topic} Papers Today* 📚\n\n"
         
         for i, paper in enumerate(results, 1):
-            title = paper['title'].replace('*', '\\*').replace('_', '\\_').replace('[', '\\[').replace(']', '\\]')
+            title = escape_markdown(paper['title'])
             authors = ', '.join(paper['authors'][:3])
             if len(paper['authors']) > 3:
                 authors += ' et al.'
+            authors = escape_markdown(authors)
             
             message += f"{i}. *{title}*\n"
             message += f"   Authors: {authors}\n"
@@ -208,12 +219,12 @@ async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         
         # Split message if it's too long
         if len(message) <= 4096:
-            await update.message.reply_text(message, parse_mode='Markdown')
+            await update.message.reply_text(message, parse_mode='MarkdownV2')
         else:
             # Simple split for long messages
             chunks = [message[i:i+4000] for i in range(0, len(message), 4000)]
             for chunk in chunks:
-                await update.message.reply_text(chunk, parse_mode='Markdown')
+                await update.message.reply_text(chunk, parse_mode='MarkdownV2')
 
 async def authorize_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Authorize a new user (admin only)."""
@@ -261,10 +272,11 @@ async def send_daily_papers(context: CallbackContext) -> None:
             message = f"📚 *{topic} Papers Today* 📚\n\n"
             
             for i, paper in enumerate(results, 1):
-                title = paper['title'].replace('*', '\\*').replace('_', '\\_').replace('[', '\\[').replace(']', '\\]')
+                title = escape_markdown(paper['title'])
                 authors = ', '.join(paper['authors'][:3])
                 if len(paper['authors']) > 3:
                     authors += ' et al.'
+                authors = escape_markdown(authors)
                 
                 message += f"{i}. *{title}*\n"
                 message += f"   Authors: {authors}\n"
@@ -277,7 +289,7 @@ async def send_daily_papers(context: CallbackContext) -> None:
                         await context.bot.send_message(
                             chat_id=user_id,
                             text=message,
-                            parse_mode='Markdown'
+                            parse_mode='MarkdownV2'
                         )
                     else:
                         # Simple split for long messages
@@ -286,7 +298,7 @@ async def send_daily_papers(context: CallbackContext) -> None:
                             await context.bot.send_message(
                                 chat_id=user_id,
                                 text=chunk,
-                                parse_mode='Markdown'
+                                parse_mode='MarkdownV2'
                             )
                 except Exception as e:
                     logger.error(f"Error sending message to user {user_id}: {e}")
