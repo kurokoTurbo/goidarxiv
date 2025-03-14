@@ -20,7 +20,7 @@ def escape_markdown(text, exclude_url=False):
     # Characters that need to be escaped in Markdown v2
     if exclude_url:
         # Don't escape characters needed for URLs
-        escape_chars = ['_', '*', '[', ']', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '!']
+        escape_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
     else:
         escape_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
     
