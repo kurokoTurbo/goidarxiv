@@ -242,26 +242,43 @@ async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     
     now = datetime.now()
     yesterday = now - timedelta(days=1)
-    all_results = []
     
-    # Fetch papers for each topic separately
-    for topic in config['topics']:
-        try:
-            results = fetch_arxiv_papers(topic, yesterday.strftime('%Y-%m-%d'), now.strftime('%Y-%m-%d'))
-            if results:
-                all_results.append((topic, results))
-        except Exception as e:
-            logger.error(f"Error fetching papers for topic {topic}: {e}")
+    # Fetch all papers for all topics in one go
+    all_papers = {}
+    papers_by_topic = {}
     
-    if not all_results:
+    try:
+        # Use comma-separated topics for a single query
+        all_topics = ",".join(config['topics'])
+        results = fetch_arxiv_papers(all_topics, yesterday.strftime('%Y-%m-%d'), now.strftime('%Y-%m-%d'))
+        
+        # Group papers by topic
+        for paper in results:
+            paper_id = paper['id']
+            if paper_id not in all_papers:
+                all_papers[paper_id] = paper
+                
+                # Add paper to each of its categories that we're tracking
+                for category in paper['categories']:
+                    if category in config['topics']:
+                        if category not in papers_by_topic:
+                            papers_by_topic[category] = []
+                        papers_by_topic[category].append(paper)
+                
+    except Exception as e:
+        logger.error(f"Error fetching papers: {e}")
+        await update.message.reply_text(f"An error occurred: {str(e)}")
+        return
+    
+    if not papers_by_topic:
         await update.message.reply_text("No papers found today for your topics.")
         return
     
-    # Format and send results
-    for topic, results in all_results:
+    # Format and send results for each topic
+    for topic, papers in papers_by_topic.items():
         message = f"📚 <b>{topic} Papers Today</b> 📚\n\n"
         
-        for i, paper in enumerate(results, 1):
+        for i, paper in enumerate(papers, 1):
             title = escape_html(paper['title'])
             authors = ', '.join(paper['authors'][:3])
             if len(paper['authors']) > 3:
@@ -440,64 +457,85 @@ async def send_daily_papers(context: CallbackContext) -> None:
     """Send daily papers to all authorized users."""
     today = datetime.now().strftime('%Y-%m-%d')
     
-    for topic in config['topics']:
-        try:
-            results = fetch_arxiv_papers(topic, today, today, max_results=10)
-            
-            if not results:
-                logger.info(f"No papers found today for topic {topic}")
-                continue
-            
-            message = f"📚 <b>{topic} Papers Today</b> 📚\n\n"
-            
-            for i, paper in enumerate(results, 1):
-                title = escape_html(paper['title'])
-                authors = ', '.join(paper['authors'][:3])
-                if len(paper['authors']) > 3:
-                    authors += ' et al.'
-                authors = escape_html(authors)
+    # Fetch all papers for all topics in one go
+    all_papers = {}
+    papers_by_topic = {}
+    
+    try:
+        # Use comma-separated topics for a single query
+        all_topics = ",".join(config['topics'])
+        results = fetch_arxiv_papers(all_topics, today, today, max_results=30)
+        
+        # Group papers by topic
+        for paper in results:
+            paper_id = paper['id']
+            if paper_id not in all_papers:
+                all_papers[paper_id] = paper
                 
-                message += f"{i}. <b>{title}</b>\n"
-                message += f"   Authors: {authors}\n"
+                # Add paper to each of its categories that we're tracking
+                for category in paper['categories']:
+                    if category in config['topics']:
+                        if category not in papers_by_topic:
+                            papers_by_topic[category] = []
+                        papers_by_topic[category].append(paper)
                 
-                paper_id = paper['id'].split('/')[-1]  # Extract just the ID part
-                message += f"   Use /abstract{paper_id} to view details\n\n"
+    except Exception as e:
+        logger.error(f"Error fetching papers: {e}")
+        return
+    
+    if not papers_by_topic:
+        logger.info("No papers found today for any tracked topics")
+        return
+    
+    # Format and send results for each topic
+    for topic, papers in papers_by_topic.items():
+        message = f"📚 <b>{topic} Papers Today</b> 📚\n\n"
+        
+        for i, paper in enumerate(papers, 1):
+            title = escape_html(paper['title'])
+            authors = ', '.join(paper['authors'][:3])
+            if len(paper['authors']) > 3:
+                authors += ' et al.'
+            authors = escape_html(authors)
             
-            # Send to all authorized users
-            for user_id in config['authorized_users']:
-                try:
-                    if len(message) <= 4096:
-                        await context.bot.send_message(
-                            chat_id=user_id,
-                            text=message,
-                            parse_mode='HTML'
-                        )
-                    else:
-                        # Use the smart chunking function
-                        chunks = chunk_html_message(message)
-                        for chunk in chunks:
+            message += f"{i}. <b>{title}</b>\n"
+            message += f"   Authors: {authors}\n"
+            
+            paper_id = paper['id'].split('/')[-1]  # Extract just the ID part
+            message += f"   Use /abstract{paper_id} to view details\n\n"
+        
+        # Send to all authorized users
+        for user_id in config['authorized_users']:
+            try:
+                if len(message) <= 4096:
+                    await context.bot.send_message(
+                        chat_id=user_id,
+                        text=message,
+                        parse_mode='HTML'
+                    )
+                else:
+                    # Use the smart chunking function
+                    chunks = chunk_html_message(message)
+                    for chunk in chunks:
+                        try:
+                            await context.bot.send_message(
+                                chat_id=user_id,
+                                text=chunk,
+                                parse_mode='HTML'
+                            )
+                        except Exception as e:
+                            logger.error(f"Error sending message chunk: {e}")
+                            # Try sending without HTML parsing as fallback
                             try:
                                 await context.bot.send_message(
                                     chat_id=user_id,
-                                    text=chunk,
-                                    parse_mode='HTML'
+                                    text=f"Could not send formatted message due to an error. Here's the plain text:\n\n{chunk}",
+                                    parse_mode=None
                                 )
-                            except Exception as e:
-                                logger.error(f"Error sending message chunk: {e}")
-                                # Try sending without HTML parsing as fallback
-                                try:
-                                    await context.bot.send_message(
-                                        chat_id=user_id,
-                                        text=f"Could not send formatted message due to an error. Here's the plain text:\n\n{chunk}",
-                                        parse_mode=None
-                                    )
-                                except Exception as inner_e:
-                                    logger.error(f"Failed to send even plain text message: {inner_e}")
-                except Exception as e:
-                    logger.error(f"Error sending message to user {user_id}: {e}")
-                    
-        except Exception as e:
-            logger.error(f"Error processing topic {topic}: {e}")
+                            except Exception as inner_e:
+                                logger.error(f"Failed to send even plain text message: {inner_e}")
+            except Exception as e:
+                logger.error(f"Error sending message to user {user_id}: {e}")
 
 def run_bot():
     """Run the bot."""
