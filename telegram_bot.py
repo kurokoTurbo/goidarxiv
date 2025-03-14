@@ -18,6 +18,59 @@ def escape_html(text):
     
     return text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
+def chunk_html_message(message, max_length=4000):
+    """Split a long HTML message into chunks without breaking HTML tags.
+    
+    Args:
+        message (str): The HTML message to split
+        max_length (int): Maximum length of each chunk
+        
+    Returns:
+        list: List of message chunks
+    """
+    if len(message) <= max_length:
+        return [message]
+    
+    chunks = []
+    current_chunk = ""
+    
+    # Simple approach: split on double newlines to keep paragraphs together
+    paragraphs = message.split("\n\n")
+    
+    for paragraph in paragraphs:
+        # If adding this paragraph would exceed the limit, start a new chunk
+        if len(current_chunk) + len(paragraph) + 2 > max_length:
+            if current_chunk:
+                chunks.append(current_chunk)
+                current_chunk = paragraph
+            else:
+                # If a single paragraph is too long, we need to split it
+                if len(paragraph) > max_length:
+                    # Try to split at a safe position like a space
+                    safe_length = max_length
+                    while safe_length > 0 and paragraph[safe_length-1] != ' ':
+                        safe_length -= 1
+                    
+                    if safe_length > 0:
+                        chunks.append(paragraph[:safe_length])
+                        current_chunk = paragraph[safe_length:]
+                    else:
+                        # Worst case: just split at max_length
+                        chunks.append(paragraph[:max_length])
+                        current_chunk = paragraph[max_length:]
+                else:
+                    current_chunk = paragraph
+        else:
+            if current_chunk:
+                current_chunk += "\n\n" + paragraph
+            else:
+                current_chunk = paragraph
+    
+    if current_chunk:
+        chunks.append(current_chunk)
+    
+    return chunks
+
 # Enable logging
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -224,10 +277,18 @@ async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         if len(message) <= 4096:
             await update.message.reply_text(message, parse_mode='HTML')
         else:
-            # Simple split for long messages
-            chunks = [message[i:i+4000] for i in range(0, len(message), 4000)]
+            # Use the smart chunking function
+            chunks = chunk_html_message(message)
             for chunk in chunks:
-                await update.message.reply_text(chunk, parse_mode='HTML')
+                try:
+                    await update.message.reply_text(chunk, parse_mode='HTML')
+                except Exception as e:
+                    logger.error(f"Error sending message chunk: {e}")
+                    # Try sending without HTML parsing as fallback
+                    try:
+                        await update.message.reply_text(f"Could not send formatted message due to an error. Here's the plain text:\n\n{chunk}", parse_mode=None)
+                    except Exception as inner_e:
+                        logger.error(f"Failed to send even plain text message: {inner_e}")
 
 async def authorize_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Authorize a new user (admin only)."""
@@ -297,14 +358,26 @@ async def send_daily_papers(context: CallbackContext) -> None:
                             parse_mode='HTML'
                         )
                     else:
-                        # Simple split for long messages
-                        chunks = [message[i:i+4000] for i in range(0, len(message), 4000)]
+                        # Use the smart chunking function
+                        chunks = chunk_html_message(message)
                         for chunk in chunks:
-                            await context.bot.send_message(
-                                chat_id=user_id,
-                                text=chunk,
-                                parse_mode='HTML'
-                            )
+                            try:
+                                await context.bot.send_message(
+                                    chat_id=user_id,
+                                    text=chunk,
+                                    parse_mode='HTML'
+                                )
+                            except Exception as e:
+                                logger.error(f"Error sending message chunk: {e}")
+                                # Try sending without HTML parsing as fallback
+                                try:
+                                    await context.bot.send_message(
+                                        chat_id=user_id,
+                                        text=f"Could not send formatted message due to an error. Here's the plain text:\n\n{chunk}",
+                                        parse_mode=None
+                                    )
+                                except Exception as inner_e:
+                                    logger.error(f"Failed to send even plain text message: {inner_e}")
                 except Exception as e:
                     logger.error(f"Error sending message to user {user_id}: {e}")
                     
