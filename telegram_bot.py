@@ -248,6 +248,7 @@ async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     papers_by_topic = {}
     
     try:
+        from arxiv_api import fetch_arxiv_papers
         # Use comma-separated topics for a single query
         all_topics = ",".join(config['topics'])
         results = fetch_arxiv_papers(all_topics, yesterday.strftime('%Y-%m-%d'), now.strftime('%Y-%m-%d'))
@@ -354,6 +355,7 @@ async def paper_abstract(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await update.message.reply_text(f'Searching for paper with ID: {paper_id}...')
     
     try:
+        from arxiv_api import fetch_arxiv_papers
         paper = fetch_paper_by_id(paper_id)
         
         if not paper:
@@ -413,6 +415,7 @@ async def abstract_no_space(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     await update.message.reply_text(f'Searching for paper with ID: {paper_id}...')
     
     try:
+        from arxiv_api import fetch_arxiv_papers
         paper = fetch_paper_by_id(paper_id)
         
         if not paper:
@@ -462,6 +465,7 @@ async def send_daily_papers(context: CallbackContext) -> None:
     papers_by_topic = {}
     
     try:
+        from arxiv_api import fetch_arxiv_papers
         # Use comma-separated topics for a single query
         all_topics = ",".join(config['topics'])
         results = fetch_arxiv_papers(all_topics, today, today, max_results=30)
