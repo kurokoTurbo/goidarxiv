@@ -22,7 +22,12 @@ def fetch_arxiv_papers(topics, start_date, end_date, max_results=100):
     if isinstance(topics, list):
         query = " OR ".join([f"cat:{topic}" if "." in topic else topic for topic in topics])
     else:
-        query = topics
+        # If topics is a string and contains commas, treat it as a list of topics
+        if ',' in topics:
+            topic_list = [t.strip() for t in topics.split(',')]
+            query = " OR ".join([f"cat:{topic}" if "." in topic else topic for topic in topic_list])
+        else:
+            query = f"cat:{topics}" if "." in topics else topics
     
     # Set up the search client
     client = arxiv.Client()
@@ -45,7 +50,8 @@ def fetch_arxiv_papers(topics, start_date, end_date, max_results=100):
                 'link': paper.pdf_url,
                 'published': paper.published.strftime('%Y-%m-%d'),
                 'authors': [author.name for author in paper.authors],
-                'id': paper.entry_id
+                'id': paper.entry_id,
+                'categories': paper.categories  # Add the categories field
             }
             results.append(paper_info)
     
