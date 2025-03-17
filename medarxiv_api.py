@@ -68,9 +68,9 @@ def fetch_medarxiv_papers(topics: Union[str, List[str]], start_date: str, end_da
                     'abstract': paper.get('abstract', ''),
                     'link': paper.get('pdf_url', '') or f"https://www.{server}.org/content/{paper.get('doi')}.full.pdf",
                     'published': paper.get('date', ''),
-                    'authors': [author.get('name', '') for author in paper.get('authors', [])],
+                    'authors': paper.get('authors', '').split(', ') if isinstance(paper.get('authors', ''), str) else [],
                     'id': paper.get('doi', ''),
-                    'categories': paper.get('category', [])
+                    'categories': paper.get('category', []) if isinstance(paper.get('category', []), list) else [paper.get('category', '')]
                 }
                 all_results.append(paper_info)
                 
@@ -135,9 +135,9 @@ def fetch_paper_by_id(paper_id: str, server: str = "medrxiv") -> Optional[Dict[s
             'abstract': paper.get('abstract', ''),
             'link': paper.get('pdf_url', '') or f"https://www.{server}.org/content/{paper.get('doi')}.full.pdf",
             'published': paper.get('date', ''),
-            'authors': [author.get('name', '') for author in paper.get('authors', [])],
+            'authors': paper.get('authors', '').split(', ') if isinstance(paper.get('authors', ''), str) else [],
             'id': paper.get('doi', ''),
-            'categories': paper.get('category', [])
+            'categories': paper.get('category', []) if isinstance(paper.get('category', []), list) else [paper.get('category', '')]
         }
     
     except requests.exceptions.RequestException as e:
