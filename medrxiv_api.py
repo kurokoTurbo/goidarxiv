@@ -3,7 +3,7 @@ from datetime import datetime
 import re
 from typing import Union, List, Dict, Any, Optional
 
-def fetch_medarxiv_papers(topics: Union[str, List[str]], start_date: str, end_date: str, max_results: int = 100, server: str = "medrxiv") -> List[Dict[str, Any]]:
+def fetch_medrxiv_papers(topics: Union[str, List[str]], start_date: str, end_date: str, max_results: int = 100, server: str = "medrxiv") -> List[Dict[str, Any]]:
     """
     Fetch medRxiv papers on specified topics within a given timeframe.
     
@@ -160,7 +160,7 @@ def fetch_paper_by_id(paper_id: str, server: str = "medrxiv") -> Optional[Dict[s
 
 if __name__ == "__main__":
     # Example usage
-    papers = fetch_medarxiv_papers("COVID-19", '2023-01-01', '2023-01-31', max_results=5)
+    papers = fetch_medrxiv_papers("COVID-19", '2023-01-01', '2023-01-31', max_results=5)
     print(f"Found {len(papers)} papers")
     
     # Example of fetching a specific paper by DOI
