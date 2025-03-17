@@ -108,7 +108,6 @@ def load_config():
     """Load configuration from JSON file"""
     if not os.path.exists(CONFIG_FILE):
         default_config = {
-            "token": "",
             "authorized_users": [],
             "topics": ["cs.CV", "cs.AI"],
             "notification_time": "09:00",
@@ -128,6 +127,15 @@ def save_config(config):
 
 # Load configuration
 config = load_config()
+
+# Check if there's a token in the config that needs to be migrated
+if 'token' in config:
+    if not os.environ.get('TELEGRAM_BOT_TOKEN'):
+        logger.warning("Token found in config.json. Please set it as TELEGRAM_BOT_TOKEN environment variable instead.")
+        logger.warning(f"You can set it with: export TELEGRAM_BOT_TOKEN='{config['token']}'")
+    # Remove token from config
+    del config['token']
+    save_config(config)
 
 # Command handlers
 @authorized_only
@@ -513,12 +521,15 @@ async def send_daily_papers(context: CallbackContext) -> None:
 
 def run_bot():
     """Run the bot."""
-    if not config['token']:
-        logger.error("No token provided. Please add your bot token to the config.json file.")
+    # Get token from environment variable
+    token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    
+    if not token:
+        logger.error("No token provided. Please set the TELEGRAM_BOT_TOKEN environment variable.")
         return
     
     # Create the Application with job_queue explicitly enabled
-    application = Application.builder().token(config['token']).build()
+    application = Application.builder().token(token).build()
     
     # Add command handlers
     application.add_handler(CommandHandler("start", start))
