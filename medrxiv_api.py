@@ -92,7 +92,7 @@ def fetch_medrxiv_papers(topics: Union[str, List[str]], start_date: str, end_dat
     return all_results[:max_results]
 
 
-def fetch_paper_by_id(paper_id: str, server: str = "medrxiv") -> Optional[Dict[str, Any]]:
+def fetch_medrxiv_paper_by_id(paper_id: str, server: str = "medrxiv") -> Optional[Dict[str, Any]]:
     """
     Fetch a single medRxiv paper by its ID (DOI).
     
@@ -166,6 +166,6 @@ if __name__ == "__main__":
     # Example of fetching a specific paper by DOI
     if papers:
         paper_id = papers[0]['id']
-        paper = fetch_paper_by_id(paper_id)
+        paper = fetch_medrxiv_paper_by_id(paper_id)
         if paper:
             print(f"Retrieved paper: {paper['title']}")
