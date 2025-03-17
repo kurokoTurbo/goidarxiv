@@ -103,32 +103,42 @@ def fetch_paper_by_id(paper_id: str, server: str = "medrxiv") -> Optional[Dict[s
     Returns:
         dict: Paper details or None if not found
     """
-    # Clean up the ID if it contains the full URL or medrxiv prefix
-    if '/' in paper_id:
-        paper_id = paper_id.split('/')[-1]
-    
-    # Remove any medrxiv.org part
-    if 'medrxiv.org' in paper_id.lower() or 'biorxiv.org' in paper_id.lower():
-        match = re.search(r'10\.\d{4,}/\d{4}\.\d{2}\.\d{2}\.\d+', paper_id)
+    # Clean up the ID
+    # If it's a full DOI with 10.1101 prefix, use it directly
+    if paper_id.startswith('10.1101/'):
+        doi = paper_id
+    # If it contains the DOI pattern, extract it
+    elif '10.1101/' in paper_id:
+        match = re.search(r'(10\.1101/\d{4}\.\d{2}\.\d{2}\.\d+)', paper_id)
         if match:
-            paper_id = match.group(0)
+            doi = match.group(1)
+        else:
+            doi = paper_id
+    # Otherwise, assume it's just the ID part and add the prefix
+    else:
+        doi = f"10.1101/{paper_id}"
     
-    # API endpoint for a specific paper using the correct format
-    api_url = f"https://api.medrxiv.org/details/{server}/{paper_id}/na/json"
+    # API endpoint for a specific paper
+    api_url = f"https://api.medrxiv.org/details/{server}/{doi}/na/json"
     
     try:
         # Make the API request
         response = requests.get(api_url)
-        response.raise_for_status()  # Raise exception for HTTP errors
+        
+        # Check if the request was successful
+        if response.status_code != 200:
+            print(f"Error: API returned status code {response.status_code}")
+            return None
         
         data = response.json()
         
-        # Check if we have results
-        collection = data.get('collection', [])
-        if not collection:
+        # Debug the response
+        if 'collection' not in data or not data['collection']:
+            print(f"No paper found with ID: {doi}")
+            print(f"API response: {data}")
             return None
         
-        paper = collection[0]
+        paper = data['collection'][0]
         
         return {
             'title': paper.get('title', ''),
@@ -142,6 +152,9 @@ def fetch_paper_by_id(paper_id: str, server: str = "medrxiv") -> Optional[Dict[s
     
     except requests.exceptions.RequestException as e:
         print(f"Error fetching paper from {server}: {e}")
+        return None
+    except Exception as e:
+        print(f"Unexpected error processing paper data: {e}")
         return None
 
 
