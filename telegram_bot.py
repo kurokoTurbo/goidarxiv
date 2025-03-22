@@ -1,34 +1,13 @@
 import logging
 import os
-from datetime import datetime, time, timedelta
-import pytz
-from telegram import Update
-from telegram.ext import Application, CommandHandler, CallbackContext, ContextTypes, MessageHandler, filters
 import json
+import pytz                                
+from datetime import datetime, time, timedelta
+from telegram import Update, Bot
+from telegram.ext import Application, CommandHandler, CallbackContext, ContextTypes, MessageHandler, filters
+
 from arxiv_api import fetch_arxiv_papers
-
-def escape_html(text):
-    """Escape HTML special characters
-    
-    Args:
-        text: Text to escape
-    """
-    if not text:
-        return ""
-    
-    return text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-
-def paper_id_without_dot(paper_id: str) -> str:
-    if "." in paper_id:
-        return paper_id.replace(".", "")
-    else:
-        return paper_id
-
-def paper_id_with_dot(paper_id: str) -> str:
-    if "." in paper_id:
-        return paper_id
-    else:
-        return paper_id[: 4] + "." + paper_id[4 : ]
+from helpers import escape_html, chunk_html_message, paper_id_with_dot, format_papers
 
 def authorized_only(func):
     """Decorator to check if user is authorized to use the bot."""
@@ -40,59 +19,6 @@ def authorized_only(func):
             return
         return await func(update, context, *args, **kwargs)
     return wrapper
-
-def chunk_html_message(message, max_length=4000):
-    """Split a long HTML message into chunks without breaking HTML tags.
-    
-    Args:
-        message (str): The HTML message to split
-        max_length (int): Maximum length of each chunk
-        
-    Returns:
-        list: List of message chunks
-    """
-    if len(message) <= max_length:
-        return [message]
-    
-    chunks = []
-    current_chunk = ""
-    
-    # Simple approach: split on double newlines to keep paragraphs together
-    paragraphs = message.split("\n\n")
-    
-    for paragraph in paragraphs:
-        # If adding this paragraph would exceed the limit, start a new chunk
-        if len(current_chunk) + len(paragraph) + 2 > max_length:
-            if current_chunk:
-                chunks.append(current_chunk)
-                current_chunk = paragraph
-            else:
-                # If a single paragraph is too long, we need to split it
-                if len(paragraph) > max_length:
-                    # Try to split at a safe position like a space
-                    safe_length = max_length
-                    while safe_length > 0 and paragraph[safe_length-1] != ' ':
-                        safe_length -= 1
-                    
-                    if safe_length > 0:
-                        chunks.append(paragraph[:safe_length])
-                        current_chunk = paragraph[safe_length:]
-                    else:
-                        # Worst case: just split at max_length
-                        chunks.append(paragraph[:max_length])
-                        current_chunk = paragraph[max_length:]
-                else:
-                    current_chunk = paragraph
-        else:
-            if current_chunk:
-                current_chunk += "\n\n" + paragraph
-            else:
-                current_chunk = paragraph
-    
-    if current_chunk:
-        chunks.append(current_chunk)
-    
-    return chunks
 
 # Enable logging
 logging.basicConfig(
@@ -134,8 +60,8 @@ if 'token' in config:
         logger.warning("Token found in config.json. Please set it as TELEGRAM_BOT_TOKEN environment variable instead.")
         logger.warning(f"You can set it with: export TELEGRAM_BOT_TOKEN='{config['token']}'")
     # Remove token from config
-    del config['token']
-    save_config(config)
+    #del config['token']
+    #save_config(config)
 
 # Command handlers
 @authorized_only
@@ -241,71 +167,37 @@ async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     now = datetime.now()
     yesterday = now - timedelta(days=1)
     
-    # Fetch all papers for all topics in one go
-    all_papers = {}
-    papers_by_topic = {}
-    
     try:
-        from arxiv_api import fetch_arxiv_papers
-        # Use comma-separated topics for a single query
-        all_topics = ",".join(config['topics'])
-        results = fetch_arxiv_papers(all_topics, yesterday.strftime('%Y-%m-%d'), now.strftime('%Y-%m-%d'))
-        
-        # Group papers by topic
-        for paper in results:
-            paper_id = paper['id']
-            if paper_id not in all_papers:
-                all_papers[paper_id] = paper
-                
-                # Add paper to each of its categories that we're tracking
-                for category in paper['categories']:
-                    if category in config['topics']:
-                        if category not in papers_by_topic:
-                            papers_by_topic[category] = []
-                        papers_by_topic[category].append(paper)
-                
+        papers = fetch_arxiv_papers(config['topics'], yesterday, now)
     except Exception as e:
         logger.error(f"Error fetching papers: {e}")
         await update.message.reply_text(f"An error occurred: {str(e)}")
         return
     
-    if not papers_by_topic:
+    if not papers:
         await update.message.reply_text("No papers found today for your topics.")
         return
-    
-    # Format and send results for each topic
-    for topic, papers in papers_by_topic.items():
-        message = f"📚 <b>{topic} Papers Today</b> 📚\n\n"
-        
-        for i, paper in enumerate(papers, 1):
-            title = escape_html(paper['title'])
-            authors = ', '.join(paper['authors'][:3])
-            if len(paper['authors']) > 3:
-                authors += ' et al.'
-            authors = escape_html(authors)
-            
-            message += f"{i}. <b>{title}</b>\n"
-            message += f"   Authors: {authors}\n"
-            
-            paper_id = paper['id'].split('/')[-1]  # Extract just the ID part
-            message += f"   Use /abstract{paper_id_without_dot(paper_id)} to view details\n\n"
-        
-        # Split message if it's too long
-        if len(message) <= 4096:
-            await update.message.reply_text(message, parse_mode='HTML')
-        else:
-            # Use the smart chunking function
-            chunks = chunk_html_message(message)
-            for chunk in chunks:
+
+    message = format_papers(papers)
+
+    # Split message if it's too long
+    if len(message) <= 4096:
+        await update.message.reply_text(message, parse_mode='HTML')
+    else:
+        # Use the smart chunking function
+        chunks = chunk_html_message(message)
+        for chunk in chunks:
+            try:
+                await update.message.reply_text(chunk, parse_mode='HTML')
+            except Exception as e:
+                logger.error(f"Error sending message chunk: {e}")
+                # Try sending without HTML parsing as fallback
                 try:
-                    await update.message.reply_text(chunk, parse_mode='HTML')
-                except Exception as e:
-                    logger.error(f"Error sending message chunk: {e}")
-                    # Try sending without HTML parsing as fallback
-                    try:
-                        await update.message.reply_text(f"Could not send formatted message due to an error. Here's the plain text:\n\n{chunk}", parse_mode=None)
-                    except Exception as inner_e:
-                        logger.error(f"Failed to send even plain text message: {inner_e}")
+                    await update.message.reply_text(
+                        f"Could not send formatted message due to an error. Here's the plain text:\n\n{chunk}",
+                        parse_mode=None)
+                except Exception as inner_e:
+                    logger.error(f"Failed to send even plain text message: {inner_e}")
 
 @authorized_only
 async def authorize_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -436,88 +328,62 @@ async def abstract_no_space(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
 async def send_daily_papers(context: CallbackContext) -> None:
     """Send daily papers to all authorized users."""
-    today = datetime.now().strftime('%Y-%m-%d')
-    
     # Fetch all papers for all topics in one go
-    all_papers = {}
-    papers_by_topic = {}
-    
+    now = datetime.now()
+    yesterday = now - timedelta(days=1)
+
     try:
-        from arxiv_api import fetch_arxiv_papers
-        # Use comma-separated topics for a single query
-        all_topics = ",".join(config['topics'])
-        results = fetch_arxiv_papers(all_topics, today, today, max_results=30)
-        
-        # Group papers by topic
-        for paper in results:
-            paper_id = paper['id']
-            if paper_id not in all_papers:
-                all_papers[paper_id] = paper
-                
-                # Add paper to each of its categories that we're tracking
-                for category in paper['categories']:
-                    if category in config['topics']:
-                        if category not in papers_by_topic:
-                            papers_by_topic[category] = []
-                        papers_by_topic[category].append(paper)
-                
+        papers = fetch_arxiv_papers(config['topics'], yesterday, now)
     except Exception as e:
         logger.error(f"Error fetching papers: {e}")
-        return
-    
-    if not papers_by_topic:
-        logger.info("No papers found today for any tracked topics")
-        return
-    
-    # Format and send results for each topic
-    for topic, papers in papers_by_topic.items():
-        message = f"📚 <b>{topic} Papers Today</b> 📚\n\n"
-        
-        for i, paper in enumerate(papers, 1):
-            title = escape_html(paper['title'])
-            authors = ', '.join(paper['authors'][:3])
-            if len(paper['authors']) > 3:
-                authors += ' et al.'
-            authors = escape_html(authors)
-            
-            message += f"{i}. <b>{title}</b>\n"
-            message += f"   Authors: {authors}\n"
-            
-            paper_id = paper['id'].split('/')[-1]  # Extract just the ID part
-            message += f"   Use /abstract{paper_id_without_dot(paper_id)} to view details\n\n"
-        
-        # Send to all authorized users
+        message = f"An error occurred: {str(e)}"
         for user_id in config['authorized_users']:
-            try:
-                if len(message) <= 4096:
-                    await context.bot.send_message(
+            await send_message_to_user(context.bot, message, user_id)
+        return 
+
+    if not papers:
+        message = "No papers found today for your topics."
+        for user_id in config['authorized_users']:
+            await send_message_to_user(context.bot, message, user_id)
+        return
+
+    message = format_papers(papers)   
+    # Send to all authorized users
+    for user_id in config['authorized_users']:
+        await send_message_to_user(context.bot, message, user_id)
+
+async def send_message_to_user(bot: Bot, message: str, user_id: str):
+    try:
+        if len(message) <= 4096:
+            await bot.send_message(
+                chat_id=user_id,
+                text=message,
+                parse_mode='HTML'
+            )
+        else:
+            # Use the smart chunking function
+            chunks = chunk_html_message(message)
+            for chunk in chunks:
+                try:
+                    await bot.send_message(
                         chat_id=user_id,
-                        text=message,
+                        text=chunk,
                         parse_mode='HTML'
                     )
-                else:
-                    # Use the smart chunking function
-                    chunks = chunk_html_message(message)
-                    for chunk in chunks:
-                        try:
-                            await context.bot.send_message(
-                                chat_id=user_id,
-                                text=chunk,
-                                parse_mode='HTML'
-                            )
-                        except Exception as e:
-                            logger.error(f"Error sending message chunk: {e}")
-                            # Try sending without HTML parsing as fallback
-                            try:
-                                await context.bot.send_message(
-                                    chat_id=user_id,
-                                    text=f"Could not send formatted message due to an error. Here's the plain text:\n\n{chunk}",
-                                    parse_mode=None
-                                )
-                            except Exception as inner_e:
-                                logger.error(f"Failed to send even plain text message: {inner_e}")
-            except Exception as e:
-                logger.error(f"Error sending message to user {user_id}: {e}")
+                except Exception as e:
+                    logger.error(f"Error sending message chunk: {e}")
+                    # Try sending without HTML parsing as fallback
+                    try:
+                        await bot.send_message(
+                            chat_id=user_id,
+                            text=f"Could not send formatted message due to an error. Here's the plain text:\n\n{chunk}",
+                            parse_mode=None
+                        )
+                    except Exception as inner_e:
+                        logger.error(f"Failed to send even plain text message: {inner_e}")
+    except Exception as e:
+        logger.error(f"Error sending message to user {user_id}: {e}")
+
 
 def run_bot():
     """Run the bot."""
@@ -526,10 +392,9 @@ def run_bot():
     
     if not token:
         logger.error("No token provided. Please set the TELEGRAM_BOT_TOKEN environment variable.")
-        return
     
     # Create the Application with job_queue explicitly enabled
-    application = Application.builder().token(token).build()
+    application = Application.builder().token(config['token']).build()
     
     # Add command handlers
     application.add_handler(CommandHandler("start", start))
@@ -556,6 +421,7 @@ def run_bot():
         send_daily_papers,
         time=time(hour=hour, minute=minute),
     )
+
     
     # Start the Bot
     application.run_polling()
